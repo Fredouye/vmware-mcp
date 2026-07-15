@@ -24,6 +24,12 @@
 5. Generator wires it automatically — no other files to touch.
 6. `bun run check`.
 
+## Transports
+
+- `MCP_TRANSPORT=stdio` (default) or `http` (Streamable HTTP, stateless, default in the Docker image).
+- MCP server logic lives in `src/server.ts` (`createMcpServer()` factory); `src/index.ts` is the entrypoint (env validation + transport selection); `src/httpServer.ts` serves `POST /mcp` + `GET /healthz`.
+- HTTP mode requires `MCP_AUTH_TOKEN` (Bearer auth) — the server exits at startup without it.
+
 ## .env
 
 - `.env` — uses `export` prefix so both `source .env` (for govc CLI) and Bun auto-load work. See `.env.example`.

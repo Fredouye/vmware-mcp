@@ -28,29 +28,72 @@ First, copy and fill in your credentials:
 cp .env.docker.example .env.docker   # edit with your vCenter URL, username & password
 ```
 
-## Quick Start — Ephemeral
+## Quick Start — HTTP (recommended for containers)
+
+The image defaults to the MCP [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http) transport on port `3211`. Unlike stdio — where each client spawns its own container — a single HTTP server is shared by any number of clients and machines, survives client restarts, and needs no Docker access from the client side.
+
+A Bearer token is **required** (`MCP_AUTH_TOKEN` in `.env.docker` — generate one with `openssl rand -hex 32`): the tools grant full vSphere control, so the server refuses to start without it.
+
+```bash
+# Docker (once)
+docker run -d --name vmware-mcp --restart unless-stopped \
+  --env-file .env.docker -p 127.0.0.1:3211:3211 ghcr.io/2501-ai/vmware-mcp
+
+# Claude Code
+claude mcp add --transport http vmware-mcp http://127.0.0.1:3211/mcp \
+  --header "Authorization: Bearer <your MCP_AUTH_TOKEN>"
+```
+
+Or in JSON client config:
+
+```json
+{
+  "mcpServers": {
+    "vmware-mcp": {
+      "type": "http",
+      "url": "http://127.0.0.1:3211/mcp",
+      "headers": { "Authorization": "Bearer <your MCP_AUTH_TOKEN>" }
+    }
+  }
+}
+```
+
+The server is stateless (no sessions), so it survives restarts and works behind load balancers. `GET /healthz` is an unauthenticated liveness probe. Only publish the port beyond localhost behind TLS (nginx/caddy reverse proxy); set `MCP_ALLOWED_HOSTS` to enable DNS-rebinding protection when exposed on a LAN.
+
+### Docker Compose
+
+The repo ships a `docker-compose.yml` that builds the image from source and publishes the port on localhost only:
+
+```bash
+cp .env.docker.example .env.docker   # fill in GOVC_* credentials and MCP_AUTH_TOKEN
+docker compose up -d --build
+```
+
+To customize (expose on the LAN, add `extra_hosts` for a vCenter not resolvable from the container, …), put your overrides in a `docker-compose.override.yml` — it is merged automatically and stays out of git.
+
+## Quick Start — stdio, Ephemeral
 
 A fresh container per connection, removed when done.
 
 ```bash
 # Docker
-docker run --rm -i --env-file .env.docker ghcr.io/2501-ai/vmware-mcp
+docker run --rm -i -e MCP_TRANSPORT=stdio --env-file .env.docker ghcr.io/2501-ai/vmware-mcp
 
 # Claude Code
-claude mcp add vmware-mcp -- docker run --rm -i --env-file .env.docker ghcr.io/2501-ai/vmware-mcp
+claude mcp add vmware-mcp -- docker run --rm -i -e MCP_TRANSPORT=stdio --env-file .env.docker ghcr.io/2501-ai/vmware-mcp
 ```
 
-## Quick Start — Persistent
+## Quick Start — stdio, Persistent
 
 The container runs as a long-lived service. Clients connect via `docker exec`.
 
 ```bash
 # Docker (once)
 docker run -d --name vmware-mcp --restart unless-stopped \
-  --env-file .env.docker -e MCP_KEEP_ALIVE=true ghcr.io/2501-ai/vmware-mcp
+  --env-file .env.docker -e MCP_TRANSPORT=stdio -e MCP_KEEP_ALIVE=true ghcr.io/2501-ai/vmware-mcp
 
 # Claude Code
-claude mcp add vmware-mcp -- docker exec -i vmware-mcp vmware-mcp
+claude mcp add vmware-mcp -- docker exec -i -e MCP_TRANSPORT=stdio vmware-mcp vmware-mcp
 ```
 
 > Restart Claude Code after running `claude mcp add`. Tools appear as `mcp__vmware-mcp__*`. Check status with `/mcp`.
@@ -81,7 +124,12 @@ bun run ui
 | `GOVC_INSECURE`   |          | Set `1` to skip TLS verification                                |
 | `GOVC_BIN`        |          | Path to `govc` binary (default: `govc`)                         |
 | `GOVC_TIMEOUT_MS` |          | Subprocess timeout in ms (default: `120000`)                    |
-| `MCP_KEEP_ALIVE`  |          | Set `true` for persistent container mode (see above)            |
+| `MCP_TRANSPORT`   |          | `stdio` (default from source) or `http` (default in the Docker image) |
+| `MCP_AUTH_TOKEN`  | (http)   | Bearer token required on `POST /mcp` — the server refuses to start in HTTP mode without it |
+| `HTTP_HOST`       |          | HTTP bind address (default `127.0.0.1`; `0.0.0.0` in the Docker image) |
+| `HTTP_PORT`       |          | HTTP port for `/mcp` and `/healthz` (default `3211`)            |
+| `MCP_ALLOWED_HOSTS` |        | Comma-separated `Host` header allowlist — enables DNS-rebinding protection |
+| `MCP_KEEP_ALIVE`  |          | stdio mode only: set `true` for persistent container mode (see above) |
 
 ## SSH Tunnel
 

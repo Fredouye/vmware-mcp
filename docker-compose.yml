@@ -1,0 +1,20 @@
+services:
+  vmware-mcp:
+    build: .
+    image: vmware-mcp:1.0
+    container_name: vmware-mcp
+    restart: unless-stopped
+    # Plain KEY=VALUE format — see .env.docker.example (GOVC_* + MCP_AUTH_TOKEN)
+    env_file: .env.docker
+    ports:
+      # Localhost only by default. To expose on the LAN, use '3211:3211'
+      # (set MCP_ALLOWED_HOSTS and consider a TLS reverse proxy — see README).
+      - '127.0.0.1:3211:3211'
+    # If your vCenter hostname is not resolvable from the container:
+    # extra_hosts:
+    #   - 'vcenter.example.com:192.0.2.10'
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3211/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 3

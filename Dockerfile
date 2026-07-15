@@ -21,8 +21,17 @@ WORKDIR /app
 COPY --from=govc-builder /usr/local/bin/govc /usr/local/bin/govc
 COPY --from=builder /app ./
 
-# MCP stdio server — used by both modes
+# MCP server entrypoint — used by all modes
 RUN printf '#!/bin/sh\nexec bun run /app/src/index.ts\n' > /usr/local/bin/vmware-mcp && \
     chmod +x /usr/local/bin/vmware-mcp
+
+# Default to the Streamable HTTP transport, listening on all interfaces
+# (the container network namespace provides the boundary; MCP_AUTH_TOKEN
+# is still required). Override MCP_TRANSPORT=stdio for the legacy modes.
+ENV MCP_TRANSPORT=http \
+    HTTP_HOST=0.0.0.0 \
+    HTTP_PORT=3211
+
+EXPOSE 3211
 
 ENTRYPOINT ["vmware-mcp"]
