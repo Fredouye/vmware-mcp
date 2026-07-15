@@ -30,7 +30,7 @@ cp .env.docker.example .env.docker   # edit with your vCenter URL, username & pa
 
 ## Quick Start — HTTP (recommended for containers)
 
-The image defaults to the MCP [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http) transport on port `3211`. Unlike stdio — where each client spawns its own container — a single HTTP server is shared by any number of clients and machines, survives client restarts, and needs no Docker access from the client side.
+The image defaults to the MCP [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http) transport on port `3211`. Unlike stdio — where each client spawns its own container — a single HTTP server is shared by any number of clients and machines, survives client restarts, and needs no Docker access from the client side. The server is stateless (no sessions), so it also survives its own restarts and works behind load balancers. `GET /healthz` is an unauthenticated liveness probe.
 
 A Bearer token is **required** (`MCP_AUTH_TOKEN` in `.env.docker` — generate one with `openssl rand -hex 32`): the tools grant full vSphere control, so the server refuses to start without it.
 
@@ -58,8 +58,6 @@ Or in JSON client config:
 }
 ```
 
-The server is stateless (no sessions), so it survives restarts and works behind load balancers. `GET /healthz` is an unauthenticated liveness probe. Only publish the port beyond localhost behind TLS (nginx/caddy reverse proxy); set `MCP_ALLOWED_HOSTS` to enable DNS-rebinding protection when exposed on a LAN.
-
 ### Docker Compose
 
 The repo ships a `docker-compose.yml` that builds the image from source and publishes the port on localhost only:
@@ -70,6 +68,57 @@ docker compose up -d --build
 ```
 
 To customize (expose on the LAN, add `extra_hosts` for a vCenter not resolvable from the container, …), put your overrides in a `docker-compose.override.yml` — it is merged automatically and stays out of git.
+
+### Exposing beyond localhost
+
+All the examples above bind to `127.0.0.1`. To serve clients on other machines, pick one of the following. In both cases, set `MCP_ALLOWED_HOSTS` to enable DNS-rebinding protection: list every name or IP (with port, if non-standard) that clients use to reach the server — requests with any other `Host` header are rejected with `403`.
+
+**Direct LAN exposure** — publish the port on all interfaces (`-p 3211:3211`, or `'3211:3211'` in compose):
+
+```bash
+# .env.docker — clients connect via http://192.168.1.10:3211 or http://vmware-mcp.lan:3211
+MCP_ALLOWED_HOSTS=192.168.1.10:3211,vmware-mcp.lan:3211,localhost:3211
+```
+
+Keep in mind that traffic — including the Bearer token — travels in clear text. Acceptable on a trusted lab network; anywhere else, prefer the reverse proxy below.
+
+**Behind a TLS reverse proxy (Traefik example)** — the proxy terminates HTTPS and reaches the container over a shared Docker network, so the port is not published at all (remove the `ports:` mapping):
+
+```yaml
+# docker-compose.yml
+services:
+  vmware-mcp:
+    image: fredouye/vmware-mcp:latest
+    container_name: vmware-mcp
+    restart: unless-stopped
+    env_file: .env.docker
+    networks:
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.vmware-mcp.rule=Host(`vmware-mcp.example.com`)
+      - traefik.http.routers.vmware-mcp.entrypoints=websecure
+      - traefik.http.routers.vmware-mcp.tls.certresolver=letsencrypt
+      - traefik.http.services.vmware-mcp.loadbalancer.server.port=3211
+
+networks:
+  proxy:
+    external: true   # the network your Traefik container is attached to
+```
+
+`MCP_ALLOWED_HOSTS` then contains the public hostname only (the `Host` header forwarded by the proxy carries no port on standard 443):
+
+```bash
+# .env.docker
+MCP_ALLOWED_HOSTS=vmware-mcp.example.com
+```
+
+Clients connect through the proxy with the same Bearer token:
+
+```bash
+claude mcp add --transport http vmware-mcp https://vmware-mcp.example.com/mcp \
+  --header "Authorization: Bearer <your MCP_AUTH_TOKEN>"
+```
 
 ## Quick Start — stdio, Ephemeral
 

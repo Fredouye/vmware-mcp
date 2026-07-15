@@ -8,8 +8,12 @@ services:
     env_file: .env.docker
     ports:
       # Localhost only by default. To expose on the LAN, use '3211:3211'
-      # (set MCP_ALLOWED_HOSTS and consider a TLS reverse proxy — see README).
+      # (set MCP_ALLOWED_HOSTS below and consider a TLS reverse proxy — see README).
       - '127.0.0.1:3211:3211'
+    # When exposed beyond localhost, allowlist the Host headers clients use
+    # (DNS-rebinding protection — any other Host is rejected with 403):
+    # environment:
+    #   MCP_ALLOWED_HOSTS: '192.168.1.10:3211,vmware-mcp.lan:3211,localhost:3211'
     # If your vCenter hostname is not resolvable from the container:
     # extra_hosts:
     #   - 'vcenter.example.com:192.0.2.10'
