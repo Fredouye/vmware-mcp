@@ -37,7 +37,7 @@ A Bearer token is **required** (`MCP_AUTH_TOKEN` in `.env.docker` — generate o
 ```bash
 # Docker (once)
 docker run -d --name vmware-mcp --restart unless-stopped \
-  --env-file .env.docker -p 127.0.0.1:3211:3211 ghcr.io/2501-ai/vmware-mcp
+  --env-file .env.docker -p 127.0.0.1:3211:3211 fredouye/vmware-mcp:latest
 
 # Claude Code
 claude mcp add --transport http vmware-mcp http://127.0.0.1:3211/mcp \
@@ -77,10 +77,10 @@ A fresh container per connection, removed when done.
 
 ```bash
 # Docker
-docker run --rm -i -e MCP_TRANSPORT=stdio --env-file .env.docker ghcr.io/2501-ai/vmware-mcp
+docker run --rm -i -e MCP_TRANSPORT=stdio --env-file .env.docker fredouye/vmware-mcp:latest
 
 # Claude Code
-claude mcp add vmware-mcp -- docker run --rm -i -e MCP_TRANSPORT=stdio --env-file .env.docker ghcr.io/2501-ai/vmware-mcp
+claude mcp add vmware-mcp -- docker run --rm -i -e MCP_TRANSPORT=stdio --env-file .env.docker fredouye/vmware-mcp:latest
 ```
 
 ## Quick Start — stdio, Persistent
@@ -90,7 +90,7 @@ The container runs as a long-lived service. Clients connect via `docker exec`.
 ```bash
 # Docker (once)
 docker run -d --name vmware-mcp --restart unless-stopped \
-  --env-file .env.docker -e MCP_TRANSPORT=stdio -e MCP_KEEP_ALIVE=true ghcr.io/2501-ai/vmware-mcp
+  --env-file .env.docker -e MCP_TRANSPORT=stdio -e MCP_KEEP_ALIVE=true fredouye/vmware-mcp:latest
 
 # Claude Code
 claude mcp add vmware-mcp -- docker exec -i -e MCP_TRANSPORT=stdio vmware-mcp vmware-mcp
@@ -101,7 +101,7 @@ claude mcp add vmware-mcp -- docker exec -i -e MCP_TRANSPORT=stdio vmware-mcp vm
 ## Quick Start — From Source
 
 ```bash
-git clone https://github.com/2501-ai/vmware-mcp.git
+git clone https://github.com/Fredouye/vmware-mcp.git
 cd vmware-mcp
 bun install
 cp .env.example .env  # fill in your credentials
